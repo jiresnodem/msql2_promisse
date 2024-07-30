@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -28,6 +30,7 @@
     "morgan": "^1.10.0",
     "mysql2": "^3.10.2",
     "nodemailer": "^6.9.14",
+    "speakeasy": "^2.0.0",
     "uuid": "^10.0.0",
     "yup": "^1.4.0"
   }

@@ -7,23 +7,31 @@ import { errorHandle } from './middlewares/errorHandle.js';
 import { notFound } from './middlewares/notFound.js';
 import morgan from 'morgan';
 import { verifyJWT } from './middlewares/verifyJWT.js';
+import cookieParser from 'cookie-parser';
+import cors from "cors";
+import { corsOptions } from './config/corsOptions.js';
 
-const app = express();
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(morgan('dev'));
 
 // Test the connection to database
 (async () => {
   try {
     await pool.getConnection();
-    console.log('Database connection successful !!!');
+    console.log('Database connection successfully !!!');
   } catch (error) {
     console.error('Database connection failed:', error);
     process.exit(1);
   }
 })();
+
+const app = express();
+
+app.use(express.static("public"));
+app.use(morgan('dev'));
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
 
 //Definition of the different endpoints of our application
 app.use('/api/auth', userRouter);

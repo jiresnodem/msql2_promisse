@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 
 const testAccount = await nodemailer.createTestAccount();
 
+
 export const transporter = nodemailer.createTransport({
   host:  env.nodeEnv === "developpement" ? "localhost" : env.mailHost,
   port: env.mailPort,

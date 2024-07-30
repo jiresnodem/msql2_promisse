@@ -14,7 +14,9 @@ export const env = {
   mailUser: process.env.MAIL_USER,
   mailPassword: process.env.MAIL_PASSWORD,
   mailHost: process.env.MAIL_HOST,
-  mailPort: process.MAIL_PORT,
-  accessTokenSecreteKey: process.env.ACCESS_TOKEN_SECRET,
-  refreshTokenSecreteKey: process.env.REFRESH_TOKEN_SECRET
+  mailPort: process.env.MAIL_PORT,
+  accessTokenSecretKey: process.env.ACCESS_TOKEN_SECRET,
+  refreshTokenSecretKey: process.env.REFRESH_TOKEN_SECRET,
+  allowOrigins: process.env.ALLOW_ORIGINS,
+  otpSecretKey : process.env.OTP_SECRET
 };

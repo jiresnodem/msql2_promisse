@@ -6,7 +6,9 @@ import bcrypt from 'bcrypt';
 import { transporter } from '../helpers/transporterMail.js';
 import { env } from '../config/env.js';
 import { NotFoundError } from '../helpers/notFoundError.js';
-import jwt from "jsonwebtoken";
+import jwt from 'jsonwebtoken';
+import speakeasy from 'speakeasy';
+import { addMinutes, format } from 'date-fns';
 
 export const register = async (req, res, next) => {
   const data = req.body;
@@ -29,7 +31,20 @@ export const register = async (req, res, next) => {
     const hash = await bcrypt.hash(data.password, salt);
     data.password = hash;
 
-    const result = await User.insertUser(data);
+    const otpCode = speakeasy.totp({
+      secret: env.otpSecretKey,
+      digits: 5,
+      step: 30,
+      counter:1000,
+      window: 5, 
+      encoding: 'base32',
+    });
+
+    const result = await User.insertUser({
+      ...data,
+      otpCode,
+      expdate: format(addMinutes(new Date(), 5), 'yyyy-MM-dd HH:mm:ss'),
+    });
 
     if (result) {
       const info = await transporter.sendMail({
@@ -37,7 +52,12 @@ export const register = async (req, res, next) => {
         to: data.email, // list of receivers
         subject: 'Hello ✔', // Subject line
         text: 'Hello world?', // plain text body
-        html: '<b>Hello world?</b>', // html body
+        html: `<h1>Confirm your Registration account !!!</h1>
+              <p>Use this opt code to confirm your account</p>
+              <p>Expiration time : 5 minutes</p>
+              <p>Otp Code : <strong>${otpCode}</strong></p>
+              <p>Thanks</p>
+        `, // html body
       });
 
       console.log('Message sent: %s', info.messageId);
@@ -56,40 +76,129 @@ export const register = async (req, res, next) => {
   }
 };
 
+export const confirmRegistration = async (req, res, next) => {
+  const { email, otpCode } = req.body;
+
+  try {
+    //Verify if the user exists in our database
+    const user = await User.readUserByEmail(email);
+    if (!user) throw new NotFoundError('This user does not exist !!!');
+
+    const match = speakeasy.totp.verify({
+      secret: env.otpSecretKey,
+      token: otpCode,
+      digits: 5,
+      step: 30,
+      counter:1000,
+      window: 5, 
+      encoding: 'base32',
+    });
+
+    if (!match)
+      return res
+        .status(401)
+        .json(response.error(401, 'Confirmation account failed !!!', {}));
+
+    const result = await User.confirmAccount({ isVerify: true, id: user.id });
+
+    return res
+      .status(200)
+      .json(
+        response.success(200, 'Confirmation account successfully !!!', result),
+      );
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const login = async (req, res, next) => {
   const data = req.body;
 
   try {
     //Verify if the user exists in our database
     const user = await User.readUserByEmail(data.email);
-    if (!user) throw new NotFoundError("This user does not exist !!!");
+    if (!user) throw new NotFoundError('This user does not exist !!!');
 
     //Check , if the password match
     const match = await bcrypt.compare(data.password, user.password);
 
-    if(!match) res.status(401).json(response.error(401, "Unauthenticated !!!", {}))
+    if (!match)
+      res.status(401).json(response.error(401, 'Unauthenticated !!!', {}));
 
-   const access_token = jwt.sign({
-        user: {id:user.id, email: user.email, fullName: user.fullName},
-        roles: ["admin"],
-        permissions:["category-create"],
-      }, env.accessTokenSecreteKey, { expiresIn: "15m"});
+    const access_token = jwt.sign(
+      {
+        user: { id: user.id, email: user.email, fullName: user.fullName },
+        roles: ['admin'],
+        permissions: ['category-create'],
+      },
+      env.accessTokenSecretKey,
+      { expiresIn: '15m' },
+    );
 
-      const refresh_token = jwt.sign({
-        user: {id:user.id, email: user.email, fullName: user.fullName},
-      }, env.refreshTokenSecreteKey, { expiresIn: "1h"});
+    const refresh_token = jwt.sign(
+      {
+        user: { id: user.id },
+      },
+      env.refreshTokenSecretKey,
+      { expiresIn: '1h' },
+    );
 
-    return res
-      .status(200)
-      .json(response.success(200, 'User logger successfully !!!', {
+    res.cookie('jwt', refresh_token, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: true,
+      maxAge: 24 * 60 * 60 * 1000, // 01 jour
+    });
+
+    return res.status(200).json(
+      response.success(200, 'User logger successfully !!!', {
         user,
-        token:{
-          type_token: "Bearer",
+        token: {
+          type_token: 'Bearer',
           access_token,
-          refresh_token
-        }
-      }));
+          refresh_token,
+        },
+      }),
+    );
   } catch (error) {
     next(error);
   }
+};
+
+export const handleRefreshToken = async (req, res, next) => {
+  const cookies = req.cookies;
+
+  if (!cookies?.jwt)
+    return res
+      .status(401)
+      .json(response.error(401, 'Not cookies or refresh token yet.', {}));
+
+  const refreshToken = cookies.jwt;
+
+  const decoded = jwt.verify(refreshToken, env.refreshTokenSecretKey);
+  if (!decoded)
+    return res.status(401).json(response.error(401, 'invalid token', {}));
+
+  let user = null;
+  if (decoded.user?.id) {
+    user = await User.readUserById(decoded.user.id);
+  }
+
+  if (!user) return res.status(403).json({ status: 403, message: 'Forbiden' });
+
+  const access_token = jwt.sign(
+    {
+      user: { id: user.id, email: user.email, fullName: user.fullName },
+      roles: ['admin'],
+      permissions: ['category-create'],
+    },
+    env.accessTokenSecretKey,
+    { expiresIn: '15m' },
+  );
+
+  res
+    .status(200)
+    .json(
+      response.success(200, 'Token resfresh successfuly !!!', { access_token }),
+    );
 };

@@ -13,8 +13,7 @@ class User {
     }
   };
 
-
-  static readUserById= async (id) => {
+  static readUserById = async (id) => {
     const sql = 'SELECT * FROM `users` WHERE `id` = ?';
     try {
       const [rows] = await pool.query(sql, [id]);
@@ -24,7 +23,6 @@ class User {
       throw new Error('Error fechting user');
     }
   };
-  
 
   static readUserByEmail = async (email) => {
     const sql = 'SELECT * FROM `users` WHERE `email` = ?';
@@ -40,7 +38,7 @@ class User {
   static insertUser = async (data) => {
     const uuid = uuidv4();
     const sql =
-      'INSERT INTO `users` (`id`, `email`, `password`, `fullName`) VALUES (?, ?, ?, ?)';
+      'INSERT INTO `users` (`id`, `email`, `password`, `fullName`,`otp`, `otp_expired_at`) VALUES (?, ?, ?, ?, ?, ?)';
 
     try {
       const [result] = await pool.query(sql, [
@@ -48,11 +46,13 @@ class User {
         data.email,
         data.password,
         data.fullName,
+        data.otpCode,
+        data.expdate,
       ]);
 
-      let user  = {};
+      let user = {};
       if (result.affectedRows) {
-           user = await this.readUserById(uuid);
+        user = await this.readUserById(uuid);
       }
 
       return user;
@@ -61,7 +61,22 @@ class User {
     }
   };
 
+  static confirmAccount = async ({ isVerify, id }) => {
+    const sql = 'UPDATE `users` SET  `is_verify`= ?  WHERE `id` = ?';
 
+    try {
+      const [result] = await pool.query(sql, [isVerify, id]);
+
+      let user = {};
+      if (result.affectedRows) {
+        user = await this.readUserById(id);
+      }
+
+      return user;
+    } catch (error) {
+      throw new Error('Error confirm user');
+    }
+  };
 }
 
 export default User;
